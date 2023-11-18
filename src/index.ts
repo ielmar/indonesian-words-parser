@@ -1,5 +1,6 @@
+import "dotenv/config";
 import express, { Express, Request, Response } from "express";
-import puppeteer, { KnownDevices } from "puppeteer-core";
+import puppeteer, { KnownDevices } from "puppeteer";
 import fs from "fs";
 
 const app: Express = express();
@@ -7,12 +8,14 @@ const app: Express = express();
 const port = process.env.PORT || 3000;
 const iPhone = KnownDevices["iPhone 8"];
 
-let currentPageNo = 0;
-let isRunning = false;
-let isFinished = false;
-const isHeadless: boolean =
-  process.env.IS_HEADLESS == null ? true : process.env.IS_HEADLESS === "true";
-const numberOfPages = 2035;
+let currentPageNo: number = 0;
+let isRunning: boolean = false;
+let isFinished: boolean = false;
+const isHeadless: boolean | "new" | undefined =
+  process.env.IS_HEADLESS == null || process.env.IS_HEADLESS === "old"
+    ? false
+    : "new";
+const numberOfPages = 106;
 
 app.get("/", async (req: Request, res: Response) => {
   return res.json({
@@ -28,7 +31,7 @@ app.get("/download", (req: Request, res: Response) => {
       message: "Still running",
     });
   } else if (isFinished) {
-    const file = `${__dirname}/az.dictionary.txt`;
+    const file = `${__dirname}/id.dictionary.txt`;
     res.download(file);
   } else {
     res.json({
@@ -47,13 +50,13 @@ app.get("/start", async (req: Request, res: Response) => {
   try {
     const browser = await puppeteer.launch({
       headless: isHeadless,
+      slowMo: 50,
       args: [
         "--no-sandbox",
         // "--window-size=1024,728",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
       ],
-      executablePath: process.env.CHROME_BIN || "/opt/homebrew/bin/chromium",
     });
 
     const page = await browser.newPage();
@@ -69,22 +72,22 @@ app.get("/start", async (req: Request, res: Response) => {
     // emulate iPhone 8
     await page.emulate(iPhone);
 
-    await page.setDefaultNavigationTimeout(90000);
+    page.setDefaultNavigationTimeout(90000);
 
     await page.setJavaScriptEnabled(false);
 
     isRunning = true;
-    res.redirect("/");
+    // res.redirect("/");
 
-    // it has 2035 pages if we start from the alphabet a
+    // it has 106 pages if we start from the alphabet a
     for (let i = 1; i <= numberOfPages; i++) {
       currentPageNo = i;
-      const linkToScrape = `https://obastan.com/azerbaycan-dilinin-orfoqrafiya-lugeti/a?l=az&p=${i}`;
+      const linkToScrape = `${process.env.SCRAPE_URL}?page=${i}`;
 
       await page.goto(linkToScrape, { waitUntil: "networkidle2" });
 
       // wait for the content
-      await page.waitForSelector(".wl");
+      await page.waitForSelector(".row");
 
       // get all the words in the page
       const words = await page.evaluate((selector) => {
@@ -95,11 +98,16 @@ app.get("/start", async (req: Request, res: Response) => {
             ? link.innerText.split(" ")[0]
             : link.innerText
         );
-      }, "div.wli-w > h3");
+      }, ".col-md-2 > ul > li");
 
       const word_string = words.join("\n") + "\n";
 
-      fs.writeFile("az.dictionary.txt", word_string, { flag: "a+" }, (err) => err && console.log("Error writing file", err));
+      fs.writeFile(
+        "id.dictionary.txt",
+        word_string,
+        { flag: "a+" },
+        (err) => err && console.log("Error writing file", err)
+      );
 
       console.log(`Page ${i} of ${numberOfPages} done`);
 
