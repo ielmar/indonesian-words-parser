@@ -16,5 +16,5 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-/az.dictionary.txt
-/az.dictionary-bkp.txt
+az.dictionary.txt
+az.dictionary-bkp.txt
